@@ -26,7 +26,7 @@ export default function LoginPage() {
   return (
     <AuthForm
       title="Masuk"
-      description="Kontrol Finansial yang Mudah"
+      description="Kuy masuk dan cek kondisi dompetmu hari ini..."
       fields={fields}
       buttonText={isPending ? "Sedang Masuk..." : "Masuk"}
       action={action}
