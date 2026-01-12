@@ -31,7 +31,7 @@ export default function RegisterPage() {
   return (
     <AuthForm
       title="Daftar"
-      description="Daftar untuk mulai menghemat"
+      description="Kuy daftar dulu ya untuk mulai menghemat..."
       fields={fields}
       buttonText={isPending ? "Sedang Mendaftar..." : "Daftar"}
       action={action}

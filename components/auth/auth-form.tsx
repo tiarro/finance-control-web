@@ -35,21 +35,16 @@ export function AuthForm({
   return (
     <div className="w-full max-w-md">
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
-          HematKuy
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">{description}</p>
+        <h1 className="text-4xl font-bold text-gray-900">HematKuy</h1>
+        <p className="text-gray-600 mt-2">{description}</p>
       </div>
 
-      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-lg p-8">
+      <div className="bg-whiterounded-xl shadow-lg border px-10 py-14 rounded-xl">
         <form onSubmit={onSubmit} action={action} className="space-y-6">
           <div className="space-y-4">
             {fields.map((field) => (
-              <div key={field.id}>
-                <Label
-                  htmlFor={field.id}
-                  className="text-gray-700 dark:text-gray-300"
-                >
+              <div className="space-y-3" key={field.id}>
+                <Label htmlFor={field.id} className="text-gray-700">
                   {field.label}
                 </Label>
                 <Input
@@ -85,7 +80,7 @@ export function AuthForm({
 
       <div className="mt-8 text-center">
         <p className="text-gray-500 dark:text-gray-500 text-sm">
-          © {new Date().getFullYear()} HematKuy. Hak cipta dilindungi.
+          © {new Date().getFullYear()} HematKuy by Tiarro Elprida Tamba.
         </p>
       </div>
     </div>

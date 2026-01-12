@@ -1,0 +1,201 @@
+.container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topSection {
+  flex-shrink: 0;
+  padding: 24px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.bottomSection {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 24px;
+  background: #f9fafb;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  background-color: #f3f4f6;
+  text-align: center;
+  border-bottom: 1px solid rgb(194, 194, 194);
+}
+
+.emptyText {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.formSection {
+  margin-top: 32px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.select {
+  padding: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  color: #374151;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.budgetList {
+  display: grid;
+  gap: 16px;
+}
+
+.budgetItem {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.budgetHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.budgetActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.editButton,
+.deleteButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.editButton {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.editButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.deleteButton {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.deleteButton:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.buttonGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.budgetCategory {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.budgetAmount {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.budgetProgress {
+  margin-top: 12px;
+}
+
+.budgetStats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.spent {
+  color: #ef4444;
+}
+
+.remaining {
+  color: #10b981;
+}
+
+.exceeded {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .topSection,
+  .bottomSection {
+    padding: 16px;
+  }
+
+  .budgetHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .budgetActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .buttonGroup {
+    flex-direction: row;
+  }
+}
