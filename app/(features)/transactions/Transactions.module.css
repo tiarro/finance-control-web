@@ -108,6 +108,117 @@
   color: #6b7280;
 }
 
+/* Transaction List Styles */
+.transactionList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transactionItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  transition: all 0.2s ease;
+}
+
+.transactionItem:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.transactionIcon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.incomeIcon {
+  color: #10b981;
+  background: #d1fae5;
+}
+
+.expenseIcon {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+.transactionDetails {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transactionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.transactionCategory {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.categoryIcon {
+  width: 16px;
+  height: 16px;
+  color: #6b7280;
+}
+
+.transactionAmount {
+  font-weight: 700;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.incomeAmount {
+  color: #10b981;
+}
+
+.expenseAmount {
+  color: #ef4444;
+}
+
+.transactionMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transactionDate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.dateIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.transactionDescription {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .formGrid {
@@ -123,5 +234,25 @@
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
+  }
+
+  .transactionItem {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .transactionIcon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .transactionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .transactionAmount {
+    font-size: 15px;
   }
 }

@@ -1,35 +1,148 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Title } from "@/components/ui/title";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Wallet } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Calendar, Tag, Loader2 } from "lucide-react";
 import styles from "./Transactions.module.css";
+import { createClient } from "@/utils/supabase/client";
+import { formatDateID } from "@/utils/format/formatDate";
+
+interface Category {
+  name: string;
+  group_name: string;
+  icon?: string;
+  color?: string;
+  type: "income" | "expense"; 
+}
+
+interface Transaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  description: string | null;
+  transaction_date: string;
+  created_at: string;
+  // Ini adalah hasil join dari Supabase
+  categories: Category;
+}
 
 export default function TransactionsPage() {
-  const [formData, setFormData] = useState({
-    type: "income",
+  const supabase = createClient();
+  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [formData, setFormData] = useState<{
+    amount: string;
+    transactionDate: string;
+    description: string;
+    categories: Category;
+  }>({
     amount: "",
-    category: "",
-    date: new Date().toISOString().split("T")[0],
+    transactionDate: new Date().toISOString().split("T")[0],
     description: "",
+    categories: {
+      name: "",
+      group_name: "",
+      type: "income",
+    },
   });
 
-  const [filter, setFilter] = useState("all");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [types, setTypes] = useState<string[]>([]);
+  const [selectedType, setSelectedType] = useState("All");
+
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
+  }, [supabase]);
+
+  useEffect(() => {
+    // Load daftar grup saat komponen muncul
+    const fetchTypes = async () => {
+      const { data } = await supabase.from("categories").select("type");
+      const uniqueTypes = Array.from(new Set(data?.map((i) => i.type)));
+      setTypes(uniqueTypes as string[]);
+    };
+    fetchTypes();
+  }, [supabase]);
+
+const getTransactions = useCallback(async () => {
+  if (!user?.id) return;
+
+  try {
+    setLoading(true);
+    
+    // 1. Inisialisasi query dasar
+    let query = supabase
+      .from("transactions")
+      .select(`
+        *,
+        categories!inner(name, group_name, icon, color, type)
+      `)
+      .eq("user_id", user.id)
+      .order("transaction_date", { ascending: false });
+
+    // 2. Tambahkan filter tipe jika bukan "All"
+    if (selectedType !== "All") {
+      query = query.eq("categories.type", selectedType);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Simpan hasil langsung ke state transactions
+    setTransactions(data || []);
+  } catch (error) {
+    console.error("Error loading transactions:", error);
+    alert("Gagal memuat data transaksi");
+  } finally {
+    setLoading(false);
+  }
+}, [user, supabase, selectedType]); // selectedType harus ada di dependency agar fetch ulang saat filter berubah
+
+  useEffect(() => {
+    getTransactions();
+  }, [user, getTransactions]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission here
-    console.log("Form submitted:", formData);
+
+    // Ensure user is logged in before adding transaction
+    if (!user?.id) {
+      alert("User not authenticated");
+      return;
+    }
+
+    // Add new transaction to the list
+    const newTransaction: Transaction = {
+      id: Date.now().toString(),
+      amount: parseFloat(formData.amount),
+      description: formData.description || null,
+      transaction_date: formData.transactionDate,
+      user_id: user.id,
+      created_at: new Date().toISOString(),
+      categories: formData.categories,
+    };
+    setTransactions((prev) => [newTransaction, ...prev]);
+
     // Reset form
     setFormData({
-      type: "income",
       amount: "",
-      category: "",
-      date: new Date().toISOString().split("T")[0],
+      transactionDate: new Date().toISOString().split("T")[0],
       description: "",
+      categories: {
+        name: "",
+        group_name: "",
+        type: "income",
+      },
     });
   };
 
@@ -38,6 +151,31 @@ export default function TransactionsPage() {
       ...prev,
       [field]: value,
     }));
+  };
+
+  // Helper functions
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const getCategoryLabel = (category: string) => {
+    const categories: Record<string, string> = {
+      salary: "Gaji",
+      freelance: "Freelance",
+      investment: "Investasi",
+      "other-income": "Lainnya",
+      food: "Makanan",
+      transport: "Transport",
+      entertainment: "Hiburan",
+      bills: "Tagihan",
+      shopping: "Belanja",
+      "other-expense": "Lainnya",
+    };
+    return categories[category] || category;
   };
 
   return (
@@ -56,8 +194,8 @@ export default function TransactionsPage() {
               <select
                 id="type"
                 className={styles.select}
-                value={formData.type}
-                onChange={(e) => handleInputChange("type", e.target.value)}
+                value={formData.categories.type}
+                onChange={(e) => handleInputChange("categories.type", e.target.value)}
               >
                 <option value="income">Pemasukan</option>
                 <option value="expense">Pengeluaran</option>
@@ -81,12 +219,12 @@ export default function TransactionsPage() {
               <select
                 id="category"
                 className={styles.select}
-                value={formData.category}
-                onChange={(e) => handleInputChange("category", e.target.value)}
+                value={formData.categories.name}
+                onChange={(e) => handleInputChange("categories.name", e.target.value)}
                 required
               >
                 <option value="">Pilih kategori...</option>
-                {formData.type === "income" ? (
+                {formData.categories.type === "income" ? (
                   <>
                     <option value="salary">Gaji</option>
                     <option value="freelance">Freelance</option>
@@ -111,8 +249,10 @@ export default function TransactionsPage() {
               <Input
                 id="date"
                 type="date"
-                value={formData.date}
-                onChange={(e) => handleInputChange("date", e.target.value)}
+                value={formData.transactionDate}
+                onChange={(e) =>
+                  handleInputChange("transactionDate", e.target.value)
+                }
                 required
               />
             </div>
@@ -129,7 +269,13 @@ export default function TransactionsPage() {
             />
           </div>
 
-          <Button type="submit" size={"lg"} className="w-full mt-4">
+          <Button type="submit" size={"lg"} className="w-full mt-4" 
+          disabled={
+            !formData.amount || 
+            !formData.transactionDate || 
+            !formData.categories.name || 
+            !formData.categories.type
+          }>
             Tambah Transaksi
           </Button>
         </form>
@@ -144,24 +290,93 @@ export default function TransactionsPage() {
             <select
               id="filter"
               className={styles.filterSelect}
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
             >
-              <option value="all">Semua Kategori</option>
-              <option value="income">Pemasukan</option>
-              <option value="expense">Pengeluaran</option>
+              <option value="All">Semua Tipe</option>
+              {types.map((type) => (
+                <option key={type} value={type}>
+                  {type === "income" ? "Pemasukan" : "Pengeluaran"}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
-        {/* Empty State */}
-        <div className={styles.emptyState}>
-          <Wallet className={styles.emptyIcon} />
-          <div className={styles.emptyTitle}>Belum ada transaksi</div>
-          <div className={styles.emptyDescription}>
-            Tambahkan transaksi pertama Anda di atas
+        {/* Loading State */}
+        {loading && transactions.length === 0 ? (
+          <div className={styles.emptyState}>
+            <Loader2 className={`${styles.emptyIcon} animate-spin`} />
+            <div className={styles.emptyTitle}>Memuat transaksi...</div>
+            <div className={styles.emptyDescription}>
+              Mohon tunggu sebentar
+            </div>
           </div>
-        </div>
+        ) : /* Empty State */
+        transactions.length === 0 ? (
+          <div className={styles.emptyState}>
+            <Wallet className={styles.emptyIcon} />
+            <div className={styles.emptyTitle}>Belum ada transaksi</div>
+            <div className={styles.emptyDescription}>
+              Tambahkan transaksi pertama Anda di atas
+            </div>
+          </div>
+        ) : (
+          <div className="relative">
+            {loading && transactions.length > 0 && (
+              <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Memperbarui...</span>
+                </div>
+              </div>
+            )}
+            <div className={styles.transactionList}>
+              {transactions.map((transaction: Transaction) => (
+              <div key={transaction.id} className={styles.transactionItem}>
+                <div className={styles.transactionIcon}>
+                  {transaction.categories.type === "income" ? (
+                    <TrendingUp className={styles.incomeIcon} />
+                  ) : (
+                    <TrendingDown className={styles.expenseIcon} />
+                  )}
+                </div>
+
+                <div className={styles.transactionDetails}>
+                  <div className={styles.transactionHeader}>
+                    <div className={styles.transactionCategory}>
+                      <Tag className={styles.categoryIcon} />
+                      {getCategoryLabel(transaction.categories.name)}
+                    </div>
+                    <div
+                      className={`${styles.transactionAmount} ${
+                        transaction.categories.type === "income"
+                          ? styles.incomeAmount
+                          : styles.expenseAmount
+                      }`}
+                    >
+                      {transaction.categories.type === "income" ? "+" : "-"}
+                      {formatCurrency(transaction.amount)}
+                    </div>
+                  </div>
+
+                  <div className={styles.transactionMeta}>
+                    <div className={styles.transactionDate}>
+                      <Calendar className={styles.dateIcon} />
+                      {formatDateID(transaction.transaction_date)}
+                    </div>
+                    {transaction.description && (
+                      <div className={styles.transactionDescription}>
+                        Keterangan : {transaction.description}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
