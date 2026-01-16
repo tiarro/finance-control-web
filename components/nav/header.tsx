@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogoutButton } from "@/components/auth/logout-button";
+import { UserProfileDropdown } from "@/components/nav/user-profile-dropdown";
 
 import { cn } from "@/lib/utils";
 import {
@@ -13,6 +13,8 @@ import {
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
 import { Menu, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
 
 const navigationItems = [
   {
@@ -33,7 +35,17 @@ const navigationItems = [
   },
 ];
 
+type UserMetadataProfile = {
+  fullName: string;
+  email: string;
+}
+
 export function Header() {
+  const [sessionProfile, setSessionProfile] = useState<UserMetadataProfile>({
+    fullName: '',
+    email: ''
+  })
+  const supabase = createClient()
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const pathname = usePathname();
 
@@ -55,6 +67,18 @@ export function Header() {
   const closeMenu = () => {
     setIsMenuOpen(false);
   };
+
+  useEffect(() => {
+    const getSession = async () => {
+      // This automatically reads the Supabase cookies for you
+      const { data: { session } } = await supabase.auth.getSession()
+      setSessionProfile({
+        fullName: session?.user.user_metadata?.full_name,
+        email: session?.user.user_metadata?.email
+      })
+    }
+    getSession()
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -90,7 +114,7 @@ export function Header() {
 
         <div className="flex flex-1 items-center justify-end">
           <div className="hidden md:block">
-            <LogoutButton />
+            <UserProfileDropdown sessionProfile={sessionProfile} />
           </div>
           {/* Mobile menu button */}
           <button
@@ -127,7 +151,7 @@ export function Header() {
               </Link>
             ))}
             <div className="py-2 text-sm">
-              <LogoutButton />
+              <UserProfileDropdown sessionProfile={sessionProfile} isMobile={true} />
             </div>
           </div>
         </div>
