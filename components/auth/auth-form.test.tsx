@@ -98,7 +98,7 @@ describe("AuthForm Component", () => {
 
     const currentYear = new Date().getFullYear();
     expect(
-      screen.getByText(`© ${currentYear} HematKuy. Hak cipta dilindungi.`)
+      screen.getByText(`© ${currentYear} HematKuy by Tiarro Elprida Tamba.`)
     ).toBeInTheDocument();
   });
 

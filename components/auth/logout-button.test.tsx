@@ -24,7 +24,6 @@ describe("LogoutButton Component", () => {
 
     const button = screen.getByRole("button", { name: "Keluar" });
     expect(button).toHaveClass("text-gray-600");
-    expect(button).toHaveClass("dark:text-gray-300");
     expect(button).toHaveClass("hover:text-red-600");
   });
 

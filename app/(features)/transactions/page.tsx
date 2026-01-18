@@ -9,8 +9,10 @@ import { Wallet, TrendingUp, TrendingDown, Calendar, Tag, Loader2 } from "lucide
 import styles from "./Transactions.module.css";
 import { createClient } from "@/utils/supabase/client";
 import { formatDateID } from "@/utils/format/formatDate";
+import { formatRupiah } from "@/utils/format/formatRupiah";
 
 interface Category {
+  id: string;
   name: string;
   group_name: string;
   icon?: string;
@@ -42,6 +44,7 @@ export default function TransactionsPage() {
     transactionDate: new Date().toISOString().split("T")[0],
     description: "",
     categories: {
+      id: "",
       name: "",
       group_name: "",
       type: "income",
@@ -52,6 +55,14 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(false);
   const [types, setTypes] = useState<string[]>([]);
   const [selectedType, setSelectedType] = useState("All");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCategoryForm, setNewCategoryForm] = useState({
+    name: "",
+    groupName: "",
+  });
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [categorySuccess, setCategorySuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const getUser = async () => {
@@ -64,14 +75,34 @@ export default function TransactionsPage() {
   }, [supabase]);
 
   useEffect(() => {
-    // Load daftar grup saat komponen muncul
-    const fetchTypes = async () => {
-      const { data } = await supabase.from("categories").select("type");
-      const uniqueTypes = Array.from(new Set(data?.map((i) => i.type)));
-      setTypes(uniqueTypes as string[]);
+    // Set fixed transaction types for filter
+    setTypes(["income", "expense"]);
+  }, []);
+
+  useEffect(() => {
+    // Load semua kategori untuk dropdown
+    const fetchCategories = async () => {
+      const { data } = await supabase.from("categories").select("*");
+      setCategories(data || []);
     };
-    fetchTypes();
+    fetchCategories();
   }, [supabase]);
+
+  // Helper function to group categories by group_name
+  const getGroupedCategories = (type?: "income" | "expense") => {
+    const filteredCategories = type 
+      ? categories.filter(cat => cat.type === type)
+      : categories;
+    
+    const grouped = filteredCategories.reduce((acc, category) => {
+      if (!acc[category.group_name]) {
+        acc[category.group_name] = [];
+      }
+      acc[category.group_name].push(category);
+      return acc;
+    }, {} as Record<string, Category[]>);
+    return grouped;
+  };
 
 const getTransactions = useCallback(async () => {
   if (!user?.id) return;
@@ -108,58 +139,191 @@ const getTransactions = useCallback(async () => {
   }
 }, [user, supabase, selectedType]); // selectedType harus ada di dependency agar fetch ulang saat filter berubah
 
-  useEffect(() => {
+    useEffect(() => {
     getTransactions();
   }, [user, getTransactions]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Ensure user is logged in before adding transaction
     if (!user?.id) {
-      alert("User not authenticated");
+      setCategoryError("User tidak terautentikasi!");
       return;
     }
 
-    // Add new transaction to the list
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      amount: parseFloat(formData.amount),
-      description: formData.description || null,
-      transaction_date: formData.transactionDate,
-      user_id: user.id,
-      created_at: new Date().toISOString(),
-      categories: formData.categories,
-    };
-    setTransactions((prev) => [newTransaction, ...prev]);
+    // Add new transaction to database
+    try {
+      // Find the category ID from the selected category name
+      const selectedCategory = categories.find(cat => cat.name === formData.categories.name);
+      if (!selectedCategory) {
+        setCategoryError("Kategori tidak ditemukan!");
+        return;
+      }
 
-    // Reset form
-    setFormData({
-      amount: "",
-      transactionDate: new Date().toISOString().split("T")[0],
-      description: "",
-      categories: {
-        name: "",
-        group_name: "",
-        type: "income",
-      },
-    });
+      const { data: newTransaction, error } = await supabase
+        .from("transactions")
+        .insert({
+          amount: parseFloat(formData.amount),
+          description: formData.description || null,
+          transaction_date: formData.transactionDate,
+          user_id: user.id, // Kolom: user_id (foreign key)
+          category_id: selectedCategory.id,  // Kolom: category_id (foreign key) - use UUID instead of name
+        })
+        .select(`
+          *,
+          categories!inner(name, group_name, icon, color, type)
+        `)
+        .single();
+
+      if (error) throw error;
+
+      // Add to local state for immediate UI update
+      setTransactions((prev) => [newTransaction, ...prev]);
+      
+      // Reset form
+      setFormData({
+        amount: "",
+        transactionDate: new Date().toISOString().split("T")[0],
+        description: "",
+        categories: {
+          id: "",
+          name: "",
+          group_name: "",
+          type: "income",
+        },
+      });
+
+      // Show success message
+      setCategorySuccess("Transaksi berhasil ditambahkan!");
+      setTimeout(() => setCategorySuccess(""), 3000);
+      
+    } catch (error) {
+      console.error("Error adding transaction:", error);
+      setCategoryError("Gagal menambahkan transaksi. Silakan coba lagi.");
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    if (field === "categories.name") {
+      if (value === "__ADD_NEW__") {
+        // Show modal instead of prompt
+        setShowAddCategoryModal(true);
+        setNewCategoryForm({ name: "", groupName: "" });
+        return;
+      }
+      
+      // Find the selected category to get its group_name and id
+      const selectedCategory = categories.find(cat => cat.name === value);
+      setFormData((prev) => ({
+        ...prev,
+        categories: {
+          ...prev.categories,
+          id: selectedCategory?.id || "",
+          name: value,
+          group_name: selectedCategory?.group_name || "",
+        },
+      }));
+    } else if (field === "categories.type") {
+      // Clear category selection when type changes
+      setFormData((prev) => ({
+        ...prev,
+        categories: {
+          ...prev.categories,
+          type: value as "income" | "expense",
+          id: "",
+          name: "",
+          group_name: "",
+        },
+      }));
+    } else if (field.startsWith("categories.")) {
+      const categoryField = field.split(".")[1];
+      setFormData((prev) => ({
+        ...prev,
+        categories: {
+          ...prev.categories,
+          [categoryField]: value,
+        },
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    }
   };
 
-  // Helper functions
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
+  const addNewCategory = async () => {
+    const { name, groupName } = newCategoryForm;
+    
+    // Clear previous messages
+    setCategoryError("");
+    setCategorySuccess("");
+    
+    if (!name.trim() || !groupName.trim()) {
+      setCategoryError("Nama kategori dan grup tidak boleh kosong!");
+      return;
+    }
+
+    if (!user?.id) {
+      setCategoryError("User tidak terautentikasi!");
+      return;
+    }
+
+    try {
+      // Check for duplicate category
+      const { data: existingCategory } = await supabase
+        .from("categories")
+        .select("name")
+        .eq("name", name.trim())  // Filter: nama = input user (tanpa spasi)
+        .eq("user_id", user.id)   // Filter: user_id = user yang login
+        .single();                // Mengambil satu data saja
+
+      if (existingCategory) {
+        setCategoryError(`Kategori "${name}" sudah ada!`);
+        return;
+      }
+
+      // Insert new category
+      const { data: newCategory, error } = await supabase
+        .from("categories")
+        .insert({
+          name: name.trim(),
+          group_name: groupName.trim(),
+          type: formData.categories.type,
+          user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Refresh categories list
+      const { data: updatedCategories } = await supabase.from("categories").select("*");
+      setCategories(updatedCategories || []);
+
+      // Auto-select newly added category
+      setFormData((prev) => ({
+        ...prev,
+        categories: {
+          ...prev.categories,
+          name: newCategory.name,
+          group_name: newCategory.group_name,
+        },
+      }));
+
+      // Close modal and reset form
+      setShowAddCategoryModal(false);
+      setNewCategoryForm({ name: "", groupName: "" });
+      setCategorySuccess(`Kategori "${name}" berhasil ditambahkan!`);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setCategorySuccess(""), 3000);
+    } catch (error) {
+      console.error("Error adding category:", error);
+      setCategoryError("Gagal menambahkan kategori. Silakan coba lagi.");
+    }
   };
 
   const getCategoryLabel = (category: string) => {
@@ -224,23 +388,18 @@ const getTransactions = useCallback(async () => {
                 required
               >
                 <option value="">Pilih kategori...</option>
-                {formData.categories.type === "income" ? (
-                  <>
-                    <option value="salary">Gaji</option>
-                    <option value="freelance">Freelance</option>
-                    <option value="investment">Investasi</option>
-                    <option value="other-income">Lainnya</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="food">Makanan</option>
-                    <option value="transport">Transport</option>
-                    <option value="entertainment">Hiburan</option>
-                    <option value="bills">Tagihan</option>
-                    <option value="shopping">Belanja</option>
-                    <option value="other-expense">Lainnya</option>
-                  </>
+                {formData.categories.type === "income" && (
+                  <option value="__ADD_NEW__">+ Tambah Kategori Baru</option>
                 )}
+                {Object.entries(getGroupedCategories(formData.categories.type)).map(([groupName, categoryList]) => (
+                  <optgroup key={groupName} label={groupName}>
+                    {categoryList.map((category) => (
+                      <option key={category.name} value={category.name}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
 
@@ -274,7 +433,9 @@ const getTransactions = useCallback(async () => {
             !formData.amount || 
             !formData.transactionDate || 
             !formData.categories.name || 
-            !formData.categories.type
+            !formData.categories.type || 
+            !formData.categories.group_name || 
+            !formData.description
           }>
             Tambah Transaksi
           </Button>
@@ -356,7 +517,7 @@ const getTransactions = useCallback(async () => {
                       }`}
                     >
                       {transaction.categories.type === "income" ? "+" : "-"}
-                      {formatCurrency(transaction.amount)}
+                      {formatRupiah(transaction.amount)}
                     </div>
                   </div>
 
@@ -378,6 +539,86 @@ const getTransactions = useCallback(async () => {
           </div>
         )}
       </div>
+
+      {/* Add Category Modal */}
+      {showAddCategoryModal && (
+        <div className="fixed inset-0 bg-gray-300 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4">Tambah Kategori Baru</h3>
+            
+            {/* Error Message */}
+            {categoryError && (
+              <div className="text-center mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{categoryError}</p>
+              </div>
+            )}
+            
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="categoryName">Nama Kategori</Label>
+                <Input
+                  id="categoryName"
+                  type="text"
+                  placeholder="Contoh: Freelance"
+                  value={newCategoryForm.name}
+                  onChange={(e) => setNewCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="mt-3"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="groupName">Nama Grup</Label>
+                <Input
+                  id="groupName"
+                  type="text"
+                  placeholder="Contoh: Pemasukan Utama"
+                  value={newCategoryForm.groupName}
+                  onChange={(e) => setNewCategoryForm(prev => ({ ...prev, groupName: e.target.value }))}
+                  className="mt-3"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowAddCategoryModal(false);
+                  setCategoryError("");
+                  setNewCategoryForm({ name: "", groupName: "" });
+                }}
+                className="flex-1"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                onClick={addNewCategory}
+                className="flex-1"
+              >
+                Tambah
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Toast */}
+      {categorySuccess && (
+        <div className="fixed top-4 right-4 bg-green-50 border border-green-200 rounded-md p-4 z-50 max-w-sm">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-green-800">{categorySuccess}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
