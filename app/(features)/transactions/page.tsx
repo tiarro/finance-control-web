@@ -191,7 +191,7 @@ const getTransactions = useCallback(async () => {
       }
 
       // Check if budget exists for this category
-      const budgetLimit = await checkBudgetExists(selectedCategory.id, selectedCategory.name);
+      const budgetLimit = await checkBudgetExists(selectedCategory.id);
       
       if (!budgetLimit) {
         setShowBudgetWarning({
