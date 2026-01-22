@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Header } from "@/components/nav/header";
+import { IncomeCheckProvider } from "@/contexts/income-check-context";
+import { WarningDialog } from "@/components/warning-dialog";
 
 export const metadata: Metadata = {
   title: "HematKuy",
@@ -14,9 +16,12 @@ export default function DashboardLayout({
   // In a real app, you would check authentication status here
   // For now, we'll just render the children
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900">
-      <Header />
-      <main className="container space-y-6">{children}</main>
-    </div>
+    <IncomeCheckProvider>
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900">
+        <Header />
+        <main className="container space-y-6">{children}</main>
+        <WarningDialog />
+      </div>
+    </IncomeCheckProvider>
   );
 }

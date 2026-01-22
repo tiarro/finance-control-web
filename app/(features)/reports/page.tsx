@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Title } from "@/components/ui/title";
-import { Label } from "@/components/ui/label";
+import { useIncomeCheck } from "@/contexts/income-check-context";
 import DonutChart from "@/components/ui/donut-chart";
 import {
   BarChart,
@@ -15,95 +15,83 @@ import {
   Area,
   AreaChart,
 } from "recharts";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Loader2 } from "lucide-react";
 import styles from "./Reports.module.css";
+import { createClient } from "@/utils/supabase/client";
+
+interface Category {
+  id: string;
+  name: string;
+  group_name: string;
+  icon?: string;
+  color?: string;
+  type: "income" | "expense";
+}
 
 interface Transaction {
   id: string;
-  type: "income" | "expense";
+  user_id: string;
   amount: number;
-  category: string;
-  date: string;
-  description: string;
+  description: string | null;
+  transaction_date: string;
+  created_at: string;
+  categories: Category;
 }
 
 export default function ReportsPage() {
-  // Mock data - replace with real data from your backend
-  const [transactions] = useState<Transaction[]>([
-    {
-      id: "1",
-      type: "income",
-      amount: 5000000,
-      category: "Gaji",
-      date: "2026-01-01",
-      description: "Gaji Januari",
-    },
-    {
-      id: "2",
-      type: "expense",
-      amount: 1500000,
-      category: "Makanan",
-      date: "2026-01-02",
-      description: "Groceries",
-    },
-    {
-      id: "3",
-      type: "expense",
-      amount: 500000,
-      category: "Transport",
-      date: "2026-01-03",
-      description: "Bensin",
-    },
-    {
-      id: "4",
-      type: "expense",
-      amount: 800000,
-      category: "Hiburan",
-      date: "2026-01-04",
-      description: "Nonton film",
-    },
-    {
-      id: "5",
-      type: "income",
-      amount: 2000000,
-      category: "Freelance",
-      date: "2026-01-05",
-      description: "Project web",
-    },
-    {
-      id: "6",
-      type: "expense",
-      amount: 300000,
-      category: "Tagihan",
-      date: "2026-01-06",
-      description: "Listrik",
-    },
-    {
-      id: "7",
-      type: "income",
-      amount: 1500000,
-      category: "Investasi",
-      date: "2026-01-07",
-      description: "Dividen saham",
-    },
-    {
-      id: "8",
-      type: "income",
-      amount: 800000,
-      category: "Bisnis",
-      date: "2026-01-08",
-      description: "Penjualan online",
-    },
-  ]);
+  const supabase = createClient();
+  const { setTotalIncome, setShowWarningDialog } = useIncomeCheck();
+  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
+  }, [supabase]);
+
+  const getTransactions = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      setLoading(true);
+      
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(`
+          *,
+          categories!inner(name, group_name, icon, color, type)
+        `)
+        .eq("user_id", user.id)
+        .order("transaction_date", { ascending: false });
+
+      if (error) throw error;
+
+      setTransactions(data || []);
+    } catch (error) {
+      console.error("Error loading transactions:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, supabase]);
+
+  useEffect(() => {
+    getTransactions();
+  }, [user, getTransactions]);
 
   // Calculate summary data
   const summaryData = useMemo(() => {
     const totalIncome = transactions
-      .filter((t) => t.type === "income")
+      .filter((t) => t.categories.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalExpense = transactions
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.categories.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
 
     const balance = totalIncome - totalExpense;
@@ -111,12 +99,24 @@ export default function ReportsPage() {
     return { totalIncome, totalExpense, balance };
   }, [transactions]);
 
+  // Update total income in context when it changes
+  useEffect(() => {
+    setTotalIncome(summaryData.totalIncome);
+  }, [summaryData.totalIncome, setTotalIncome]);
+
+  // Show warning if no income and not loading
+  useEffect(() => {
+    if (summaryData.totalIncome <= 0 && !loading && transactions.length > 0) {
+      setShowWarningDialog(true);
+    }
+  }, [summaryData.totalIncome, loading, transactions.length, setShowWarningDialog]);
+
   // Prepare expense categories data for donut chart
   const expenseCategories = useMemo(() => {
     const categoryTotals = transactions
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.categories.type === "expense")
       .reduce((acc, t) => {
-        acc[t.category] = (acc[t.category] || 0) + t.amount;
+        acc[t.categories.name] = (acc[t.categories.name] || 0) + t.amount;
         return acc;
       }, {} as Record<string, number>);
 
@@ -140,9 +140,9 @@ export default function ReportsPage() {
   // Prepare income categories data for donut chart
   const incomeCategories = useMemo(() => {
     const categoryTotals = transactions
-      .filter((t) => t.type === "income")
+      .filter((t) => t.categories.type === "income")
       .reduce((acc, t) => {
-        acc[t.category] = (acc[t.category] || 0) + t.amount;
+        acc[t.categories.name] = (acc[t.categories.name] || 0) + t.amount;
         return acc;
       }, {} as Record<string, number>);
 
@@ -166,13 +166,13 @@ export default function ReportsPage() {
   // Prepare monthly trend data
   const monthlyTrend = useMemo(() => {
     const monthlyData = transactions.reduce((acc, t) => {
-      const month = new Date(t.date).toLocaleDateString("id-ID", {
+      const month = new Date(t.transaction_date).toLocaleDateString("id-ID", {
         month: "short",
       });
       if (!acc[month]) {
         acc[month] = { month, income: 0, expense: 0 };
       }
-      if (t.type === "income") {
+      if (t.categories.type === "income") {
         acc[month].income += t.amount;
       } else {
         acc[month].expense += t.amount;
@@ -186,9 +186,9 @@ export default function ReportsPage() {
   // Prepare daily spending data for area chart
   const dailySpending = useMemo(() => {
     const dailyData = transactions
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.categories.type === "expense")
       .reduce((acc, t) => {
-        const day = new Date(t.date).getDate();
+        const day = new Date(t.transaction_date).getDate();
         acc[day] = (acc[day] || 0) + t.amount;
         return acc;
       }, {} as Record<number, number>);
@@ -199,8 +199,27 @@ export default function ReportsPage() {
     }));
   }, [transactions]);
 
+  // Show loading state
+  if (loading && transactions.length === 0) {
+    return (
+      <div className={styles.container}>
+        <Title label="Laporan" size="md" as="h2" />
+        <p className="text-gray-600 text-sm mt-3 mb-5">
+          Analisis kebiasaan finansialmu lewat grafik informatif.
+        </p>
+        <div className={styles.emptyState}>
+          <Loader2 className={`${styles.emptyIcon} animate-spin`} />
+          <div className={styles.emptyTitle}>Memuat Data...</div>
+          <div className={styles.emptyDescription}>
+            Mohon tunggu sebentar
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Show empty state if no transactions
-  if (transactions.length === 0) {
+  if (!loading && transactions.length === 0) {
     return (
       <div className={styles.container}>
         <Title label="Laporan Keuangan" size="md" as="h2" className="mb-5" />

@@ -6,11 +6,13 @@ import { createClient } from "@/utils/supabase/client";
 import { Title } from "@/components/ui/title";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard } from "lucide-react";
+import { useIncomeCheck } from "@/contexts/income-check-context";
 import styles from "./Dashboard.module.css";
 
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { setTotalIncome, checkIncomeAndNavigate } = useIncomeCheck();
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState({
     totalIncome: 0,
@@ -25,7 +27,7 @@ export default function DashboardPage() {
       const { data, error } = await supabase
         .from("transactions")
         .select(`
-          amount,
+          *,
           categories!inner(type)
         `)
         .eq("user_id", userId);
@@ -53,12 +55,13 @@ export default function DashboardPage() {
         totalExpense,
         balance,
       });
+      setTotalIncome(totalIncome);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, setTotalIncome]);
 
     useEffect(() => {
     const checkUser = async () => {
@@ -139,7 +142,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <Button size="lg" onClick={() => router.push("/transactions")}>
+        <Button size="lg" onClick={() => checkIncomeAndNavigate("/transactions", () => router.push("/transactions"))}>
           Tambah Transaksi Pertama
         </Button>
       </div>

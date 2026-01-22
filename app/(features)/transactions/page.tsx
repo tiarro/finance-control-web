@@ -5,11 +5,13 @@ import { Title } from "@/components/ui/title";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Wallet, TrendingUp, TrendingDown, Calendar, Tag, Loader2 } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Calendar, Tag, Loader2, Edit, Trash2 } from "lucide-react";
 import styles from "./Transactions.module.css";
 import { createClient } from "@/utils/supabase/client";
 import { formatDateID } from "@/utils/format/formatDate";
 import { formatRupiah } from "@/utils/format/formatRupiah";
+import { useIncomeCheck } from "@/contexts/income-check-context";
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 
 interface Category {
   id: string;
@@ -32,6 +34,7 @@ interface Transaction {
 }
 
 export default function TransactionsPage() {
+  const { setTotalIncome } = useIncomeCheck();
   const supabase = createClient();
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [formData, setFormData] = useState<{
@@ -68,6 +71,39 @@ export default function TransactionsPage() {
     categoryName: string;
     budgetLimit: number;
   } | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
+
+  const checkUserIncome = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(`
+          *,
+          categories!inner(type)
+        `)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      const transactions = data || [] as Array<{
+        amount: number;
+        categories: {
+          type: string;
+        };
+      }>;
+      
+      const totalIncome = transactions
+        .filter(t => t.categories.type === "income")
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      setTotalIncome(totalIncome);
+    } catch (error) {
+      console.error("Error checking user income:", error);
+    }
+  }, [supabase, setTotalIncome]);
 
   useEffect(() => {
     const getUser = async () => {
@@ -75,9 +111,14 @@ export default function TransactionsPage() {
         data: { user },
       } = await supabase.auth.getUser();
       setUser(user);
+      
+      // Check total income after user is set
+      if (user) {
+        await checkUserIncome(user.id);
+      }
     };
     getUser();
-  }, [supabase]);
+  }, [supabase, checkUserIncome]);
 
   useEffect(() => {
     // Set fixed transaction types for filter
@@ -181,6 +222,8 @@ const getTransactions = useCallback(async () => {
       return;
     }
 
+    setLoading(true);
+
     // Add new transaction to database
     try {
       // Find category ID from selected category name
@@ -190,16 +233,19 @@ const getTransactions = useCallback(async () => {
         return;
       }
 
-      // Check if budget exists for this category
-      const budgetLimit = await checkBudgetExists(selectedCategory.id);
-      
-      if (!budgetLimit) {
-        setShowBudgetWarning({
-          isOpen: true,
-          categoryName: selectedCategory.name,
-          budgetLimit: 0
-        });
-        return;
+      // Check if budget exists for this category (only for expense transactions)
+      let budgetLimit = null;
+      if (selectedCategory.type === "expense") {
+        budgetLimit = await checkBudgetExists(selectedCategory.id);
+        
+        if (!budgetLimit) {
+          setShowBudgetWarning({
+            isOpen: true,
+            categoryName: selectedCategory.name,
+            budgetLimit: 0
+          });
+          return;
+        }
       }
 
       const { data: newTransaction, error } = await supabase
@@ -242,6 +288,8 @@ const getTransactions = useCallback(async () => {
     } catch (error) {
       console.error("Error adding transaction:", error);
       setCategoryError("Gagal menambahkan transaksi. Silakan coba lagi.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -382,16 +430,156 @@ const getTransactions = useCallback(async () => {
     return categories[category] || category;
   };
 
+  const handleEditTransaction = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setFormData({
+      amount: transaction.amount.toString(),
+      transactionDate: transaction.transaction_date,
+      description: transaction.description || "",
+      categories: transaction.categories,
+    });
+    setIsEditing(true);
+  };
+
+  const handleUpdateTransaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingTransaction?.id || !user?.id) {
+      setCategoryError("Data transaksi tidak valid!");
+      return;
+    }
+
+    // Find category ID from selected category name
+    const selectedCategory = categories.find(cat => cat.name === formData.categories.name);
+    if (!selectedCategory) {
+      setCategoryError("Kategori tidak ditemukan!");
+      return;
+    }
+
+    // Check if budget exists for this category (only for expense transactions)
+    let budgetLimit = null;
+    if (selectedCategory.type === "expense") {
+      budgetLimit = await checkBudgetExists(selectedCategory.id);
+      
+      if (!budgetLimit) {
+        setCategoryError("Budget tidak ditemukan untuk kategori pengeluaran ini!");
+        return;
+      }
+    }
+
+    try {
+      const { data: updatedTransaction, error } = await supabase
+        .from("transactions")
+        .update({
+          amount: parseFloat(formData.amount),
+          description: formData.description || null,
+          transaction_date: formData.transactionDate,
+          category_id: selectedCategory.id,
+        })
+        .eq("id", editingTransaction.id)
+        .eq("user_id", user.id)
+        .select(`
+          *,
+          categories!inner(name, group_name, icon, color, type)
+        `)
+        .single();
+
+      if (error) throw error;
+
+      // Update local state
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === editingTransaction.id ? updatedTransaction : t))
+      );
+      
+      // Reset form and editing state
+      setIsEditing(false);
+      setEditingTransaction(null);
+      setFormData({
+        amount: "",
+        transactionDate: new Date().toISOString().split("T")[0],
+        description: "",
+        categories: {
+          id: "",
+          name: "",
+          group_name: "",
+          type: "income",
+        },
+      });
+
+      // Show success message
+      setCategorySuccess("Transaksi berhasil diperbarui!");
+      setTimeout(() => setCategorySuccess(""), 3000);
+      
+    } catch (error) {
+      console.error("Error updating transaction:", error);
+      setCategoryError("Gagal memperbarui transaksi. Silakan coba lagi.");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditingTransaction(null);
+    setFormData({
+      amount: "",
+      transactionDate: new Date().toISOString().split("T")[0],
+      description: "",
+      categories: {
+        id: "",
+        name: "",
+        group_name: "",
+        type: "income",
+      },
+    });
+    setCategoryError("");
+  };
+
+  const handleDeleteTransaction = (transactionId: string) => {
+    setTransactionToDelete(transactionId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteTransaction = async () => {
+    if (!transactionToDelete || !user?.id) {
+      setCategoryError("Data transaksi tidak valid!");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", transactionToDelete)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setTransactions((prev) => prev.filter((t) => t.id !== transactionToDelete));
+      
+      // Show success message
+      setCategorySuccess("Transaksi berhasil dihapus!");
+      setTimeout(() => setCategorySuccess(""), 3000);
+      
+      // Close modal
+      setShowDeleteModal(false);
+      setTransactionToDelete(null);
+      
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      setCategoryError("Gagal menghapus transaksi. Silakan coba lagi.");
+    }
+  };
+
   return (
     <div className={styles.container}>
       {/* Top Section - Form */}
-      <Title label="Transaksi" size="md" as="h2" />
+      <Title label={isEditing ? "Edit Transaksi" : "Transaksi"} size="md" as="h2" />
       <p className="text-gray-600 text-sm mt-3 mb-5">
         Rencanakan belanja hari ini untuk kenyamanan esok hari.
       </p>
 
       <div className={styles.formCard}>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={isEditing ? handleUpdateTransaction : handleSubmit}>
           <div className={styles.formGrid}>
             <div className={styles.formGroup}>
               <Label htmlFor="type">Tipe</Label>
@@ -468,17 +656,36 @@ const getTransactions = useCallback(async () => {
             />
           </div>
 
-          <Button type="submit" size={"lg"} className="w-full mt-4" 
-          disabled={
-            !formData.amount || 
-            !formData.transactionDate || 
-            !formData.categories.name || 
-            !formData.categories.type || 
-            !formData.categories.group_name || 
-            !formData.description
-          }>
-            Tambah Transaksi
-          </Button>
+          <div className="flex gap-3 mt-4">
+            {isEditing && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="lg" 
+                className="flex-1" 
+                onClick={handleCancelEdit}
+                disabled={loading}
+              >
+                Batal
+              </Button>
+            )}
+            <Button 
+              type="submit" 
+              size="lg" 
+              className={isEditing ? "flex-1" : "w-full"} 
+              disabled={
+                !formData.amount || 
+                !formData.transactionDate || 
+                !formData.categories.name || 
+                !formData.categories.type || 
+                !formData.categories.group_name || 
+                !formData.description ||
+                loading
+              }
+            >
+              {isEditing ? "Simpan Perubahan" : "Tambah Transaksi"}
+            </Button>
+          </div>
         </form>
       </div>
 
@@ -571,6 +778,22 @@ const getTransactions = useCallback(async () => {
                         Keterangan : {transaction.description}
                       </div>
                     )}
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => handleEditTransaction(transaction)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                        title="Edit transaksi"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTransaction(transaction.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        title="Hapus transaksi"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -699,6 +922,17 @@ const getTransactions = useCallback(async () => {
           </div>
         </div>
       )}
-    </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationDialog
+        open={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        onConfirm={confirmDeleteTransaction}
+        title="Hapus Transaksi"
+        description="Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan. Transaksi yang dihapus akan hilang permanen dari riwayat."
+        itemName="transaksi ini"
+      />
+
+          </div>
   );
 }
