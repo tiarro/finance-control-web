@@ -40,15 +40,14 @@ export function UserProfileDropdown({ sessionProfile, isMobile = false }: UserPr
   if (isMobile) {
     if (isLoggedIn) {
       return (
-        <div className="space-y-3">
-          <div className="flex flex-col p-3 bg-muted rounded-lg gap-2">
+          <div className="flex flex-col p-3 bg-blue-100 rounded-lg gap-2">
             <Avatar className="h-10 w-10">
               <AvatarImage src="" alt={sessionProfile.fullName} />
               <AvatarFallback>
                 {sessionProfile.fullName?.charAt(0).toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
+            <div className="flex-1 my-2">
               <p className="text-sm font-medium">{sessionProfile.fullName}</p>
               <p className="text-xs text-muted-foreground">{sessionProfile.email}</p>
             </div>
@@ -62,7 +61,6 @@ export function UserProfileDropdown({ sessionProfile, isMobile = false }: UserPr
               <span>Keluar</span>
             </Button>
           </div>
-        </div>
       );
     }
 
