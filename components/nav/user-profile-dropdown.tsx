@@ -41,7 +41,7 @@ export function UserProfileDropdown({ sessionProfile, isMobile = false }: UserPr
     if (isLoggedIn) {
       return (
         <div className="space-y-3">
-          <div className="flex items-center space-x-3 p-3 bg-muted rounded-lg">
+          <div className="flex flex-col p-3 bg-muted rounded-lg gap-2">
             <Avatar className="h-10 w-10">
               <AvatarImage src="" alt={sessionProfile.fullName} />
               <AvatarFallback>
@@ -53,13 +53,14 @@ export function UserProfileDropdown({ sessionProfile, isMobile = false }: UserPr
               <p className="text-xs text-muted-foreground">{sessionProfile.email}</p>
             </div>
 
-            <div 
-              className="flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-accent rounded-md transition-colors cursor-pointer"
+            <Button
+              variant="outline"
+              className="flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-accent rounded-md transition-colors cursor-pointer"
               onClick={handleLogout}
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-5 w-5" />
               <span>Keluar</span>
-            </div>
+            </Button>
           </div>
         </div>
       );

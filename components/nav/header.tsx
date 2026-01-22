@@ -2,14 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { UserProfileDropdown } from "@/components/nav/user-profile-dropdown";
+import { useIncomeCheck } from "@/contexts/income-check-context";
+import "@/components/nav/header.css";
 
 import { cn } from "@/lib/utils";
 import {
   NavigationMenu,
   NavigationMenuItem,
-  NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
 import { Menu, X } from "lucide-react";
@@ -41,6 +42,8 @@ type UserMetadataProfile = {
 }
 
 export function Header() {
+  const router = useRouter();
+  const { checkIncomeAndNavigate } = useIncomeCheck();
   const [sessionProfile, setSessionProfile] = useState<UserMetadataProfile>({
     fullName: '',
     email: ''
@@ -66,6 +69,16 @@ export function Header() {
 
   const closeMenu = () => {
     setIsMenuOpen(false);
+  };
+
+  const handleNavigationClick = (href: string) => {
+    // Only check income for transactions and budgets
+    if (href === "/transactions" || href === "/budgets") {
+      checkIncomeAndNavigate(href, () => router.push(href));
+    } else {
+      router.push(href);
+    }
+    closeMenu();
   };
 
   useEffect(() => {
@@ -95,17 +108,17 @@ export function Header() {
             <NavigationMenuList>
               {navigationItems.map((item) => (
                 <NavigationMenuItem key={item.href}>
-                  <NavigationMenuLink
-                    asChild
+                  <button
+                    onClick={() => handleNavigationClick(item.href)}
                     className={cn(
-                      "text-[0.9rem] md:gap-5 font-medium transition-colors hover:text-primary",
+                      "text-[1rem] md:gap-5 font-medium transition-colors hover:text-primary bg-transparent border-none cursor-pointer",
                       pathname === item.href
                         ? "text-foreground"
                         : "text-muted-foreground"
                     )}
                   >
-                    <Link href={item.href}>{item.title}</Link>
-                  </NavigationMenuLink>
+                    {item.title}
+                  </button>
                 </NavigationMenuItem>
               ))}
             </NavigationMenuList>
@@ -136,19 +149,18 @@ export function Header() {
         <div className="md:hidden border-t bg-background">
           <div className="container py-4 flex flex-col space-y-3">
             {navigationItems.map((item) => (
-              <Link
+              <button
                 key={item.href}
-                href={item.href}
+                onClick={() => handleNavigationClick(item.href)}
                 className={cn(
-                  "text-sm font-medium transition-colors hover:text-primary py-2",
+                  "text-sm font-medium transition-colors hover:text-primary py-2 bg-transparent border-none cursor-pointer text-left",
                   pathname === item.href
                     ? "text-foreground"
                     : "text-muted-foreground"
                 )}
-                onClick={closeMenu}
               >
                 {item.title}
-              </Link>
+              </button>
             ))}
             <div className="py-2 text-sm">
               <UserProfileDropdown sessionProfile={sessionProfile} isMobile={true} />

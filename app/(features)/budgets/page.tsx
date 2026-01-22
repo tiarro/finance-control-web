@@ -6,17 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import ProgressBar from "@/components/ui/progress-bar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Edit2, Trash2, Loader2 } from "lucide-react";
 import styles from "./Budgets.module.css";
 import { createClient } from "@/utils/supabase/client";
+import { useIncomeCheck } from "@/contexts/income-check-context";
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 
 interface Budget {
   id: string;
@@ -36,6 +30,7 @@ interface Budget {
 }
 
 export default function BudgetsPage() {
+  const { setTotalIncome } = useIncomeCheck();
   const supabase = createClient();
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -66,6 +61,35 @@ export default function BudgetsPage() {
     budgetCategory: "",
   });
 
+  const checkUserIncome = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(`
+          *,
+          categories!inner(type)
+        `)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      const transactions = data || [] as Array<{
+        amount: number;
+        categories: {
+          type: string;
+        };
+      }>;
+      
+      const totalIncome = transactions
+        .filter(t => t.categories.type === "income")
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      setTotalIncome(totalIncome);
+    } catch (error) {
+      console.error("Error checking user income:", error);
+    }
+  }, [supabase, setTotalIncome]);
+
   useEffect(() => {
     const getUser = async () => {
       console.log("Getting user...");
@@ -81,9 +105,14 @@ export default function BudgetsPage() {
       }
       
       setUser(user);
+      
+      // Check total income after user is set
+      if (user) {
+        await checkUserIncome(user.id);
+      }
     };
     getUser();
-  }, [supabase]);
+  }, [supabase, checkUserIncome]);
 
   const getBudgets = useCallback(async () => {
     if (!user?.id) return;
@@ -533,29 +562,14 @@ export default function BudgetsPage() {
       </div>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <DeleteConfirmationDialog
         open={deleteDialog.isOpen}
         onOpenChange={(open) => !open && cancelDeleteBudget()}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Hapus Budget</DialogTitle>
-            <DialogDescription>
-              Apakah Anda yakin ingin menghapus budget untuk kategori &quot;
-              {deleteDialog.budgetCategory}&quot;? Tindakan ini tidak dapat
-              dibatalkan.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={cancelDeleteBudget}>
-              Batal
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteBudget}>
-              Hapus
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onConfirm={confirmDeleteBudget}
+        title="Hapus Budget"
+        description={`Apakah Anda yakin ingin menghapus budget untuk kategori "${deleteDialog.budgetCategory}"? Tindakan ini tidak dapat dibatalkan.`}
+        itemName={`budget untuk kategori "${deleteDialog.budgetCategory}"`}
+      />
     </div>
   );
 }
