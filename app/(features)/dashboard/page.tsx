@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Title } from "@/components/ui/title";
@@ -10,28 +10,72 @@ import styles from "./Dashboard.module.css";
 
 export default function DashboardPage() {
   const router = useRouter();
-
-  // Mock data - replace with real data from your backend
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState({
-    totalIncome: 5000000,
-    totalExpense: 3500000,
-    balance: 1500000,
+    totalIncome: 0,
+    totalExpense: 0,
+    balance: 0,
   });
 
-  useEffect(() => {
+  const fetchDashboardData = useCallback(async (userId: string) => {
+    try {
+      setLoading(true);
+      
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(`
+          amount,
+          categories!inner(type)
+        `)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      const transactions = data || [] as Array<{
+        amount: number;
+        categories: {
+          type: string;
+        };
+      }>;
+      const totalIncome = transactions
+        .filter(t => t.categories.type === "income")
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const totalExpense = transactions
+        .filter(t => t.categories.type === "expense")
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const balance = totalIncome - totalExpense;
+
+      setDashboardData({
+        totalIncome,
+        totalExpense,
+        balance,
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+    useEffect(() => {
     const checkUser = async () => {
-      const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
       if (!user) {
         router.push("/login");
+        return;
       }
+
+      await fetchDashboardData(user.id);
     };
 
     checkUser();
-  }, [router]);
+  }, [router, fetchDashboardData, supabase.auth]);
 
   return (
     <div className="h-screen flex flex-col">
@@ -42,32 +86,40 @@ export default function DashboardPage() {
         </p>
 
         <div className={styles.statsGrid}>
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>Total Pemasukan</div>
-            <div className={`${styles.statValue} ${styles.incomeValue}`}>
-              Rp {dashboardData.totalIncome.toLocaleString("id-ID")}
+          {loading ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className={styles.statCard}>
+                <div className={styles.statLabel}>Total Pemasukan</div>
+                <div className={`${styles.statValue} ${styles.incomeValue}`}>
+                  Rp {dashboardData.totalIncome.toLocaleString("id-ID")}
+                </div>
+              </div>
 
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>Total Pengeluaran</div>
-            <div className={`${styles.statValue} ${styles.expenseValue}`}>
-              Rp {dashboardData.totalExpense.toLocaleString("id-ID")}
-            </div>
-          </div>
+              <div className={styles.statCard}>
+                <div className={styles.statLabel}>Total Pengeluaran</div>
+                <div className={`${styles.statValue} ${styles.expenseValue}`}>
+                  Rp {dashboardData.totalExpense.toLocaleString("id-ID")}
+                </div>
+              </div>
 
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>Saldo</div>
-            <div
-              className={`${styles.statValue} ${
-                dashboardData.balance >= 0
-                  ? styles.balancePositive
-                  : styles.balanceNegative
-              }`}
-            >
-              Rp {dashboardData.balance.toLocaleString("id-ID")}
-            </div>
-          </div>
+              <div className={styles.statCard}>
+                <div className={styles.statLabel}>Saldo</div>
+                <div
+                  className={`${styles.statValue} ${
+                    dashboardData.balance >= 0
+                      ? styles.balancePositive
+                      : styles.balanceNegative
+                  }`}
+                >
+                  Rp {dashboardData.balance.toLocaleString("id-ID")}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
