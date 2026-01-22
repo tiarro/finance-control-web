@@ -144,26 +144,60 @@ export function Header() {
         </div>
       </div>
 
-      {/* Mobile Navigation */}
+      {/* Mobile Navigation - Sidebar Style */}
       {isMenuOpen && (
-        <div className="md:hidden border-t bg-background">
-          <div className="container py-4 flex flex-col space-y-3">
-            {navigationItems.map((item) => (
-              <button
-                key={item.href}
-                onClick={() => handleNavigationClick(item.href)}
-                className={cn(
-                  "text-sm font-medium transition-colors hover:text-primary py-2 bg-transparent border-none cursor-pointer text-left",
-                  pathname === item.href
-                    ? "text-foreground"
-                    : "text-muted-foreground"
-                )}
-              >
-                {item.title}
-              </button>
-            ))}
-            <div className="py-2 text-sm">
-              <UserProfileDropdown sessionProfile={sessionProfile} isMobile={true} />
+        <div className="md:hidden fixed inset-0 z-50 flex bg">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50" 
+            onClick={closeMenu}
+          />
+          
+          {/* Sidebar */}
+          <div className="relative bg-white w-80 h-screen shadow-xl">
+            <div className="flex flex-col h-full">
+              {/* Sidebar Header */}
+              <div className="flex items-center justify-between p-4.5 border-b">
+                <h2 className="text-lg font-semibold">Menu</h2>
+              </div>
+              
+              {/* Navigation Items */}
+              <nav className="flex-1 p-4">
+                <div className="space-y-2">
+                  {navigationItems.map((item) => (
+                    <button
+                      key={item.href}
+                      onClick={() => handleNavigationClick(item.href)}
+                      className={cn(
+                        "w-full text-left px-3 py-3 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground flex items-center gap-3",
+                        pathname === item.href
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      {/* Add icon based on route */}
+                      {item.href === "/dashboard" && (
+                        <div className="h-4 w-4 rounded bg-primary" />
+                      )}
+                      {item.href === "/transactions" && (
+                        <div className="h-4 w-4 rounded bg-blue-500" />
+                      )}
+                      {item.href === "/budgets" && (
+                        <div className="h-4 w-4 rounded bg-green-500" />
+                      )}
+                      {item.href === "/reports" && (
+                        <div className="h-4 w-4 rounded bg-orange-500" />
+                      )}
+                      {item.title}
+                    </button>
+                  ))}
+                </div>
+              </nav>
+              
+              {/* User Profile Section */}
+              <div className="border-t p-4">
+                <UserProfileDropdown sessionProfile={sessionProfile} isMobile={true} />
+              </div>
             </div>
           </div>
         </div>
