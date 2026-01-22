@@ -63,6 +63,11 @@ export default function TransactionsPage() {
   });
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [categorySuccess, setCategorySuccess] = useState<string | null>(null);
+  const [showBudgetWarning, setShowBudgetWarning] = useState<{
+    isOpen: boolean;
+    categoryName: string;
+    budgetLimit: number;
+  } | null>(null);
 
   useEffect(() => {
     const getUser = async () => {
@@ -144,6 +149,29 @@ const getTransactions = useCallback(async () => {
   }, [user, getTransactions]);
 
 
+  const checkBudgetExists = async (categoryId: string) => {
+    if (!user?.id) return false;
+    
+    try {
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      
+      const { data: existingBudget } = await supabase
+        .from("budgets")
+        .select("limit_amount")
+        .eq("user_id", user.id)
+        .eq("category_id", categoryId)
+        .eq("month", currentMonth)
+        .eq("year", currentYear)
+        .single();
+      
+      return existingBudget ? existingBudget.limit_amount : null;
+    } catch (error) {
+      console.error("Error checking budget:", error);
+      return null;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -155,10 +183,22 @@ const getTransactions = useCallback(async () => {
 
     // Add new transaction to database
     try {
-      // Find the category ID from the selected category name
+      // Find category ID from selected category name
       const selectedCategory = categories.find(cat => cat.name === formData.categories.name);
       if (!selectedCategory) {
         setCategoryError("Kategori tidak ditemukan!");
+        return;
+      }
+
+      // Check if budget exists for this category
+      const budgetLimit = await checkBudgetExists(selectedCategory.id, selectedCategory.name);
+      
+      if (!budgetLimit) {
+        setShowBudgetWarning({
+          isOpen: true,
+          categoryName: selectedCategory.name,
+          budgetLimit: 0
+        });
         return;
       }
 
@@ -608,13 +648,53 @@ const getTransactions = useCallback(async () => {
       {categorySuccess && (
         <div className="fixed top-4 right-4 bg-green-50 border border-green-200 rounded-md p-4 z-50 max-w-sm">
           <div className="flex items-center">
-            <div className="flex-shrink-0">
+            <div className="flex shrink-0">
               <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-green-800">{categorySuccess}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Budget Warning Modal */}
+      {showBudgetWarning && (
+        <div className="fixed inset-0 bg-gray-300 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-600">
+              ⚠️ Belum Ada Budget
+            </h3>
+            <div className="mb-6">
+              <p className="text-gray-700 mb-2">
+                Anda belum mengatur budget untuk kategori <strong>&quot;{showBudgetWarning.categoryName}&quot;</strong>.
+              </p>
+              <p className="text-gray-600 text-sm">
+                Silakan buat budget terlebih dahulu di halaman <strong>Anggaran</strong> sebelum menambahkan transaksi.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowBudgetWarning(null)}
+                className="flex-1"
+              >
+                Mengerti
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setShowBudgetWarning(null);
+                  // Redirect to budgets page
+                  window.location.href = '/budgets';
+                }}
+                className="flex-1"
+              >
+                Buat Budget
+              </Button>
             </div>
           </div>
         </div>

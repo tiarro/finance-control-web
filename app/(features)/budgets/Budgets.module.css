@@ -35,6 +35,25 @@
   color: #6b7280;
 }
 
+.emptyIcon {
+  width: 48px;
+  height: 48px;
+  color: #9ca3af;
+  margin-bottom: 16px;
+}
+
+.emptyTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.emptyDescription {
+  font-size: 14px;
+  color: #6b7280;
+}
+
 .formSection {
   margin-top: 32px;
 }
@@ -44,6 +63,12 @@
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   margin-bottom: 24px;
+}
+
+@media (min-width: 1024px) {
+  .formGrid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .formGroup {
